@@ -522,6 +522,13 @@ export interface KitConfig {
 		 * @default false
 		 */
 		handleRenderingErrors?: boolean;
+
+		/**
+		 * Whether to disable the client-side router. When enabled, SvelteKit will not intercept
+		 * link clicks or manage history state, and `before/afterNavigate` will not run.
+		 * @default false
+		 */
+		noRouter?: boolean;
 	};
 	/**
 	 * Where to find various files within your project.
