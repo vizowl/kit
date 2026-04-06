@@ -141,7 +141,8 @@ const options = object(
 				}),
 				remoteFunctions: boolean(false),
 				forkPreloads: boolean(false),
-				handleRenderingErrors: boolean(false)
+				handleRenderingErrors: boolean(false),
+				noRouter: boolean(false)
 			}),
 
 			files: object({

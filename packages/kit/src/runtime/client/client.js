@@ -335,7 +335,7 @@ export async function start(_app, _target, hydrate) {
 
 	await _app.hooks.init?.();
 
-	routes = __SVELTEKIT_CLIENT_ROUTING__ ? parse(_app) : [];
+	routes = __SVELTEKIT_CLIENT_ROUTING__ && !__SVELTEKIT_NO_ROUTER__ ? parse(_app) : [];
 	container = __SVELTEKIT_EMBEDDED__ ? _target : document.documentElement;
 	target = _target;
 
@@ -345,6 +345,11 @@ export async function start(_app, _target, hydrate) {
 	default_error_loader = _app.nodes[1];
 	void default_layout_loader();
 	void default_error_loader();
+
+	if (__SVELTEKIT_NO_ROUTER__ && hydrate) {
+		console.log('hydrating without router');
+		await _hydrate(target, hydrate);
+	} else {
 
 	current_history_index = history.state?.[HISTORY_INDEX];
 	current_navigation_index = history.state?.[NAVIGATION_INDEX];
@@ -388,8 +393,8 @@ export async function start(_app, _target, hydrate) {
 
 		restore_scroll();
 	}
-
-	_start_router();
+		_start_router();
+	}
 }
 
 async function _invalidate(include_load_functions = true, reset_page_state = true) {
