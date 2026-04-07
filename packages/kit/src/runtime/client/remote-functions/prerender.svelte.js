@@ -1,5 +1,5 @@
 /** @import { RemotePrerenderFunction } from '@sveltejs/kit' */
-import { app_dir, base } from '$app/paths/internal/client';
+import { app_dir, assets, base } from '$app/paths/internal/client';
 import { version } from '__sveltekit/environment';
 import * as devalue from 'devalue';
 import { DEV } from 'esm-env';
@@ -65,7 +65,7 @@ export function prerender(id) {
 			resource = new Prerender(async () => {
 				await prerender_cache_ready;
 
-				const url = `${base}/${app_dir}/remote/${id}${payload ? `/${payload}` : ''}`;
+				const url = create_prerender_remote_url(id, payload);
 
 				if (Object.hasOwn(prerender_responses, cache_key)) {
 					const data = prerender_responses[cache_key];
@@ -110,6 +110,15 @@ export function prerender(id) {
 
 		return resource;
 	};
+}
+
+/**
+ * @param {string} id
+ * @param {string} payload
+ */
+function create_prerender_remote_url(id, payload) {
+	const root = DEV ? base : assets;
+	return `${root}/${app_dir}/remote/${id}${payload ? `/${payload}` : ''}`;
 }
 
 /** @type {Map<string, WeakRef<Prerender<any>>>} */
