@@ -334,7 +334,7 @@ export async function start(_app, _target, hydrate) {
 
 	await _app.hooks.init?.();
 
-	routes = __SVELTEKIT_CLIENT_ROUTING__ && !__SVELTEKIT_NO_ROUTER__ ? parse(_app) : [];
+	routes = __SVELTEKIT_CLIENT_ROUTING__ ? parse(_app) : [];
 	container = __SVELTEKIT_EMBEDDED__ ? _target : document.documentElement;
 	target = _target;
 
@@ -349,49 +349,48 @@ export async function start(_app, _target, hydrate) {
 		console.log('hydrating without router');
 		await _hydrate(target, hydrate);
 	} else {
+		current_history_index = history.state?.[HISTORY_INDEX];
+		current_navigation_index = history.state?.[NAVIGATION_INDEX];
 
-	current_history_index = history.state?.[HISTORY_INDEX];
-	current_navigation_index = history.state?.[NAVIGATION_INDEX];
+		if (!current_history_index) {
+			// we use Date.now() as an offset so that cross-document navigations
+			// within the app don't result in data loss
+			current_history_index = current_navigation_index = Date.now();
 
-	if (!current_history_index) {
-		// we use Date.now() as an offset so that cross-document navigations
-		// within the app don't result in data loss
-		current_history_index = current_navigation_index = Date.now();
-
-		// create initial history entry, so we can return here
-		history.replaceState(
-			{
-				...history.state,
-				[HISTORY_INDEX]: current_history_index,
-				[NAVIGATION_INDEX]: current_navigation_index
-			},
-			''
-		);
-	}
-
-	// if we reload the page, or Cmd-Shift-T back to it,
-	// recover scroll position
-	const scroll = scroll_positions[current_history_index];
-	function restore_scroll() {
-		if (scroll) {
-			history.scrollRestoration = 'manual';
-			scrollTo(scroll.x, scroll.y);
+			// create initial history entry, so we can return here
+			history.replaceState(
+				{
+					...history.state,
+					[HISTORY_INDEX]: current_history_index,
+					[NAVIGATION_INDEX]: current_navigation_index
+				},
+				''
+			);
 		}
-	}
 
-	if (hydrate) {
-		restore_scroll();
+		// if we reload the page, or Cmd-Shift-T back to it,
+		// recover scroll position
+		const scroll = scroll_positions[current_history_index];
+		function restore_scroll() {
+			if (scroll) {
+				history.scrollRestoration = 'manual';
+				scrollTo(scroll.x, scroll.y);
+			}
+		}
 
-		await _hydrate(target, hydrate);
-	} else {
-		await navigate({
-			type: 'enter',
-			url: resolve_url(app.hash ? decode_hash(new URL(location.href)) : location.href),
-			replace_state: true
-		});
+		if (hydrate) {
+			restore_scroll();
 
-		restore_scroll();
-	}
+			await _hydrate(target, hydrate);
+		} else {
+			await navigate({
+				type: 'enter',
+				url: resolve_url(app.hash ? decode_hash(new URL(location.href)) : location.href),
+				replace_state: true
+			});
+
+			restore_scroll();
+		}
 		_start_router();
 	}
 }
