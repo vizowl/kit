@@ -1886,8 +1886,8 @@ declare module '@sveltejs/kit' {
 		checkbox: boolean | string[];
 		radio: string;
 		file: File;
-		hidden: string;
-		submit: string;
+		hidden: string | number | boolean;
+		submit: string | number | boolean;
 		button: string;
 		reset: string;
 		image: string;
@@ -1978,11 +1978,15 @@ declare module '@sveltejs/kit' {
 			: Value extends boolean
 				? [type: Type] | [type: Type, value: boolean]
 				: [type: Type] | [type: Type, value: Value | (string & {})]
-		: Type extends 'radio' | 'submit' | 'hidden'
-			? [type: Type, value: Value | (string & {})]
-			: Type extends 'file' | 'file multiple'
-				? [type: Type]
-				: [type: Type] | [type: Type, value: Value | (string & {})];
+		: Type extends 'submit' | 'hidden'
+			? Value extends string
+				? [type: Type, value: Value | (string & {})]
+				: [type: Type, value: Value]
+			: Type extends 'radio'
+				? [type: Type, value: Value | (string & {})]
+				: Type extends 'file' | 'file multiple'
+					? [type: Type]
+					: [type: Type] | [type: Type, value: Value | (string & {})];
 
 	/**
 	 * Form field accessor type that provides name(), value(), and issues() methods
@@ -2725,7 +2729,10 @@ declare module '@sveltejs/kit' {
 		universal_id?: string;
 		server_id?: string;
 
-		/** inlined styles */
+		/**
+		 * During development, all styles are inlined for the page to avoid FOUC.
+		 * But in production, this stores styles that are below the inline threshold
+		 */
 		inline_styles?(): MaybePromise<
 			Record<string, string | ((assets: string, base: string) => string)>
 		>;
@@ -2930,7 +2937,7 @@ declare module '@sveltejs/kit' {
 	class Redirect_1 {
 		
 		constructor(status: 300 | 301 | 302 | 303 | 304 | 305 | 306 | 307 | 308, location: string);
-		status: 300 | 301 | 302 | 303 | 304 | 305 | 306 | 307 | 308;
+		status: 301 | 302 | 303 | 307 | 308 | 300 | 304 | 305 | 306;
 		location: string;
 	}
 
