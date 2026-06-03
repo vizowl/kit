@@ -116,7 +116,7 @@ export function prerender(id) {
  * @param {string} payload
  */
 function create_prerender_remote_url(id, payload) {
-	const root = DEV ? base : assets;
+	const root = __SVELTEKIT_DEV__ ? base : assets;
 	return `${root}/${app_dir}/remote/${id}${payload ? `/${payload}` : ''}`;
 }
 
