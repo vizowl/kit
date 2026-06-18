@@ -116,7 +116,7 @@ declare module '@sveltejs/kit' {
 		generateFallback: (dest: string) => Promise<void>;
 
 		/**
-		 * Generate a module exposing build-time environment variables as `$env/dynamic/public` if the app uses it.
+		 * Generate a module exposing build-time environment variables as `$env/dynamic/public` or `$app/env/public` if the app uses it.
 		 */
 		generateEnvModule: () => void;
 
@@ -452,7 +452,7 @@ declare module '@sveltejs/kit' {
 		experimental?: {
 			/**
 			 * Whether to enable explicit environment variables using `src/env.js` or `src/env.ts`.
-			 * @since 2.62.0
+			 * @since 2.63.0
 			 * @default false
 			 */
 			explicitEnvironmentVariables?: boolean;
@@ -1531,6 +1531,10 @@ declare module '@sveltejs/kit' {
 		locals: App.Locals;
 		/**
 		 * The parameters of the current route - e.g. for a route like `/blog/[slug]`, a `{ slug: string }` object.
+		 *
+		 * In the context of a remote function request initiated by the client, this relates to the page the remote function
+		 * was called from, _not_ the URL of the endpoint SvelteKit creates for the remote function. Never use this to determine
+		 * whether or not a user is authorized to access certain data, as these values are part of the request which could be manipulated.
 		 */
 		params: Params;
 		/**
@@ -1547,6 +1551,10 @@ declare module '@sveltejs/kit' {
 		route: {
 			/**
 			 * The ID of the current route - e.g. for `src/routes/blog/[slug]`, it would be `/blog/[slug]`. It is `null` when no route is matched.
+			 *
+			 * In the context of a remote function request initiated by the client, this relates to the page the remote function
+			 * was called from, _not_ the URL of the endpoint SvelteKit creates for the remote function. Never use this to determine
+			 * whether or not a user is authorized to access certain data, as these values are part of the request which could be manipulated.
 			 */
 			id: RouteId;
 		};
@@ -1575,6 +1583,10 @@ declare module '@sveltejs/kit' {
 		setHeaders: (headers: Record<string, string>) => void;
 		/**
 		 * The requested URL.
+		 *
+		 * In the context of a remote function request initiated by the client, this relates to the page the remote function
+		 * was called from, _not_ the URL of the endpoint SvelteKit creates for the remote function. Never use this to determine
+		 * whether or not a user is authorized to access certain data, as these values are part of the request which could be manipulated.
 		 */
 		url: URL;
 		/**
@@ -1677,7 +1689,7 @@ declare module '@sveltejs/kit' {
 
 		/** private fields */
 		_: {
-			client: NonNullable<BuildData['client']>;
+			client: BuildData['client'];
 			nodes: SSRNodeLoader[];
 			/** hashed filename -> import to that file */
 			remotes: Record<string, () => Promise<any>>;
@@ -2391,7 +2403,10 @@ declare module '@sveltejs/kit' {
 			| 'unsafe-eval'
 			| 'unsafe-hashes'
 			| 'unsafe-inline'
+			| 'unsafe-allow-redirects'
+			| 'unsafe-webtransport-hashes'
 			| 'wasm-unsafe-eval'
+			| 'trusted-types-eval'
 			| 'none';
 		type CryptoSource = `${'nonce' | 'sha256' | 'sha384' | 'sha512'}-${string}`;
 		type FrameSource = HostSource | SchemeSource | 'self' | 'none';
@@ -2400,7 +2415,16 @@ declare module '@sveltejs/kit' {
 		type HostProtocolSchemes = `${string}://` | '';
 		type HttpDelineator = '/' | '?' | '#' | '\\';
 		type PortScheme = `:${number}` | '' | ':*';
-		type SchemeSource = 'http:' | 'https:' | 'data:' | 'mediastream:' | 'blob:' | 'filesystem:';
+		type SchemeSource =
+			| 'http:'
+			| 'https:'
+			| 'ws:'
+			| 'wss:'
+			| 'data:'
+			| 'mediastream:'
+			| 'blob:'
+			| 'filesystem:'
+			| (`${string}:` & {});
 		type Source = HostSource | SchemeSource | CryptoSource | BaseSource;
 		type Sources = Source[];
 	}
@@ -2619,6 +2643,9 @@ declare module '@sveltejs/kit' {
 			routes?: SSRClientRoute[];
 			stylesheets: string[];
 			fonts: string[];
+			/**
+			 * Whether the client uses public dynamic env vars — `$env/dynamic/public` or `$app/env/public`.
+			 */
 			uses_env_dynamic_public: boolean;
 			/** Only set in case of `bundleStrategy === 'inline'`. */
 			inline?: {
@@ -2955,8 +2982,16 @@ declare module '@sveltejs/kit' {
 	export type LessThan<TNumber extends number, TArray extends any[] = []> = TNumber extends TArray["length"] ? TArray[number] : LessThan<TNumber, [...TArray, TArray["length"]]>;
 	export type NumericRange<TStart extends number, TEnd extends number> = Exclude<TEnd | LessThan<TEnd>, LessThan<TStart>>;
 	type ValidPageOption = (typeof valid_page_options_array)[number];
-	type PageOptions = Partial<Record<ValidPageOption, any>>;
-	const valid_page_options_array: readonly ["ssr", "prerender", "csr", "trailingSlash", "config", "entries", "load"];
+
+	type PageOptions = Partial<{
+		[K in ValidPageOption]: K extends 'ssr' | 'csr'
+			? boolean
+			: K extends 'prerender'
+				? PrerenderOption
+				: K extends 'trailingSlash'
+					? TrailingSlash
+					: any;
+	}>;
 	export const VERSION: string;
 	class HttpError_1 {
 		
@@ -2973,6 +3008,7 @@ declare module '@sveltejs/kit' {
 		status: 300 | 301 | 302 | 303 | 304 | 305 | 306 | 307 | 308;
 		location: string;
 	}
+	const valid_page_options_array: readonly ["ssr", "prerender", "csr", "trailingSlash", "config", "entries", "load"];
 
 	export {};
 }
@@ -3089,13 +3125,14 @@ declare module '@sveltejs/kit/node/polyfills' {
 
 declare module '@sveltejs/kit/vite' {
 	import type { KitConfig } from '@sveltejs/kit';
-	import type { SvelteConfig } from '@sveltejs/vite-plugin-svelte';
+	import type { Options, SvelteConfig } from '@sveltejs/vite-plugin-svelte';
 	import type { Plugin } from 'vite';
 	/**
 	 * Returns the SvelteKit Vite plugins.
 	 * Since version 2.62.0 you can pass [configuration](configuration) directly, in which case `svelte.config.js` is ignored.
+	 * Any options that don't belong to SvelteKit are passed through to `vite-plugin-svelte`.
 	 * */
-	export function sveltekit(config?: KitConfig & Omit<SvelteConfig, "onwarn">): Promise<Plugin[]>;
+	export function sveltekit(config?: KitConfig & Omit<Options, "onwarn"> & Pick<SvelteConfig, "vitePlugin">): Promise<Plugin[]>;
 
 	export {};
 }
@@ -3329,7 +3366,7 @@ declare module '$app/navigation' {
 }
 
 declare module '$app/paths' {
-	import type { RouteIdWithSearchOrHash, PathnameWithSearchOrHash, ResolvedPathname, RouteId, RouteParams, Asset, Pathname as Pathname_1 } from '$app/types';
+	import type { RouteIdWithSearchOrHash, PathnameWithSearchOrHash, ResolvedPathname, RouteId, RouteParams, Asset, Pathname } from '$app/types';
 	/**
 	 * A string that matches [`config.kit.paths.base`](https://svelte.dev/docs/kit/configuration#paths).
 	 *
@@ -3426,7 +3463,7 @@ declare module '$app/paths' {
 	 * @since 2.52.0
 	 *
 	 * */
-	export function match(url: Pathname_1 | URL | (string & {})): Promise<{
+	export function match(url: Pathname | URL | (string & {})): Promise<{
 		id: RouteId;
 		params: Record<string, string>;
 	} | null>;
@@ -3505,7 +3542,7 @@ declare module '$app/server' {
 	 *
 	 * @since 2.27
 	 */
-	export function form<Schema extends StandardSchemaV1<RemoteFormInput, Record<string, any>>, Output>(validate: Schema, fn: (data: StandardSchemaV1.InferOutput<Schema>, issue: InvalidField<StandardSchemaV1.InferInput<Schema>>) => MaybePromise<Output>): RemoteForm<StandardSchemaV1.InferInput<Schema>, Output>;
+	export function form<Schema extends StandardSchemaV1<RemoteFormInput, Record<string, any>>, Output>(validate: true extends HasNonOptionalBoolean<StandardSchemaV1.InferInput<Schema>> ? "Error: All booleans in form schemas must be optional (e.g. `v.optional(v.boolean(), false)`) because checkbox inputs do not send a false value when unchecked." : Schema, fn: (data: StandardSchemaV1.InferOutput<Schema>, issue: InvalidField<StandardSchemaV1.InferInput<Schema>>) => MaybePromise<Output>): RemoteForm<StandardSchemaV1.InferInput<Schema>, Output>;
 	/**
 	 * Creates a remote prerender function. When called from the browser, the function will be invoked on the server via a `fetch` call.
 	 *
@@ -3673,6 +3710,19 @@ declare module '$app/server' {
 	type RemotePrerenderInputsGenerator<Input = any> = () => MaybePromise<Input[]>;
 	type MaybePromise<T> = T | Promise<T>;
 
+	type IsAny<T> = 0 extends 1 & T ? true : false;
+
+	type HasNonOptionalBoolean<T> =
+		IsAny<T> extends true
+			? never
+			: [T] extends [boolean]
+				? true
+				: T extends Array<infer U>
+					? HasNonOptionalBoolean<U>
+					: T extends Record<string, any>
+						? { [K in keyof T]: HasNonOptionalBoolean<T[K]> }[keyof T]
+						: never;
+
 	export {};
 }
 
@@ -3776,7 +3826,9 @@ declare module '$app/stores' {
 	};
 
 	export {};
-}/**
+}
+
+/**
  * It's possible to tell SvelteKit how to type objects inside your app by declaring the `App` namespace. By default, a new project will have a file called `src/app.d.ts` containing the following:
  *
  * ```ts
